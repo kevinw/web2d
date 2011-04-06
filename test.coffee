@@ -572,7 +572,7 @@ window.webGLStart = ->
     gl.clearColor(0.0, 0.0, 0.0, 1.0)
     gl.disable(gl.DEPTH_TEST)
 
-    neheTexture = Texture('mariotiles.gif', ->
+    neheTexture = Texture('data/mariotiles.gif', ->
         loadJSON('data/testmap.json', (x, err) ->
             map = Tilemap2(x, {
                 texture: neheTexture,
