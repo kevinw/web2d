@@ -86,8 +86,13 @@ Tilemap2 = (map, texinfo) ->
 
     numTilesWide = texinfo.tilesWide || parseInt(img.width / ((texinfo.tilegapx || 0) + tilewidth))
     tileCoord = (tileIndex) ->
+        y = 0
+        while (tileIndex > texinfo.tilesWide)
+            tileIndex -= texinfo.tilesWide
+            y += 1
+
         return [tileIndex * (tilewidth + texinfo.tilegapx) / img.width,
-                0]
+                y * (tileheight + texinfo.tilegapy) / img.height]
 
     console.log('texwidth:  ' + texwidth)
     console.log('texheight: ' + texheight)
@@ -495,7 +500,7 @@ drawScene = ->
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
     #mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix)
-    mat4.ortho(0, gl.viewportWidth, gl.viewportHeight, 0, -1.0, 1.0, pMatrix)
+    mat4.ortho(0, gl.viewportWidth/2, gl.viewportHeight/2, 0, -1.0, 1.0, pMatrix)
     mat4.identity(mvMatrix)
     mat4.translate(mvMatrix, [camx, camy, 0])
     #mat4.translate(mvMatrix, [0.0, 0.0, -5.0])
@@ -521,40 +526,28 @@ drawScene = ->
     map.draw(shaderProgram)
 
 
-    
-
 lastTime = 0
-
-animate = ->
-    timeNow = new Date().getTime()
-    if lastTime != 0
-        elapsed = timeNow - lastTime
-
-        xRot += (90 * elapsed) / 1000.0
-        yRot += (90 * elapsed) / 1000.0
-        zRot += (90 * elapsed) / 1000.0
-
-    lastTime = timeNow
 
 timeMs = -> new Date().getTime()
 lastFrame = timeMs()
 
-tick = ->
-    requestAnimFrame(tick)
-
+logic = ->
     now = timeMs()
     delta = now - lastFrame
     lastFrame = now
 
     cammove = .55 * delta
 
-    if keyPressed(key.right) then camx -= cammove
     if keyPressed(key.left) then camx += cammove
-    if keyPressed(key.up) then camy -= cammove
-    if keyPressed(key.down) then camy += cammove
+    if keyPressed(key.right) then camx -= cammove
+    if keyPressed(key.up) then camy += cammove
+    if keyPressed(key.down) then camy -= cammove
 
+
+tick = ->
+    requestAnimFrame(tick)
+    logic()
     drawScene()
-    animate()
 
 map = undefined
 
