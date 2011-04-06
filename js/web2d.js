@@ -1,5 +1,5 @@
 (function() {
-  var Buffer, Program, Texture, Tilemap, Tilemap2, animate, camx, camy, cubeVertexIndexBuffer, cubeVertexPositionBuffer, cubeVertexTextureCoordBuffer, degToRad, drawScene, endsWith, flatten, getShader, gl, gridVerts, initBuffers, initGL, initShaders, isPowerOfTwo, key, keyPressed, keys, lastFrame, lastTime, loadData, loadJSON, map, mvMatrix, mvMatrixStack, mvPopMatrix, mvPushMatrix, neheTexture, nextHighestPowerOfTwo, pMatrix, setMatrixUniforms, shaderProgram, tick, tilemap, timeMs, triangleStripGrid, triangleStripGrid2, uniformSetter, xRot, yRot, zRot, _linkProgramFromShaders;
+  var Buffer, Program, Texture, Tilemap, Tilemap2, camx, camy, cubeVertexIndexBuffer, cubeVertexPositionBuffer, cubeVertexTextureCoordBuffer, degToRad, drawScene, endsWith, flatten, getShader, gl, gridVerts, initBuffers, initGL, initShaders, isPowerOfTwo, key, keyPressed, keys, lastFrame, lastTime, loadData, loadJSON, logic, map, mvMatrix, mvMatrixStack, mvPopMatrix, mvPushMatrix, neheTexture, nextHighestPowerOfTwo, pMatrix, setMatrixUniforms, shaderProgram, tick, tilemap, timeMs, triangleStripGrid, triangleStripGrid2, uniformSetter, xRot, yRot, zRot, _linkProgramFromShaders;
   gl = void 0;
   key = {
     left: 37,
@@ -93,7 +93,13 @@
     texheight = tileheight / img.height;
     numTilesWide = texinfo.tilesWide || parseInt(img.width / ((texinfo.tilegapx || 0) + tilewidth));
     tileCoord = function(tileIndex) {
-      return [tileIndex * (tilewidth + texinfo.tilegapx) / img.width, 0];
+      var y;
+      y = 0;
+      while (tileIndex > texinfo.tilesWide) {
+        tileIndex -= texinfo.tilesWide;
+        y += 1;
+      }
+      return [tileIndex * (tilewidth + texinfo.tilegapx) / img.width, y * (tileheight + texinfo.tilegapy) / img.height];
     };
     console.log('texwidth:  ' + texwidth);
     console.log('texheight: ' + texheight);
@@ -519,7 +525,7 @@
   drawScene = function() {
     gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    mat4.ortho(0, gl.viewportWidth, gl.viewportHeight, 0, -1.0, 1.0, pMatrix);
+    mat4.ortho(0, gl.viewportWidth / 2, gl.viewportHeight / 2, 0, -1.0, 1.0, pMatrix);
     mat4.identity(mvMatrix);
     mat4.translate(mvMatrix, [camx, camy, 0]);
     shaderProgram.attrib.aVertexPosition(cubeVertexPositionBuffer);
@@ -531,42 +537,33 @@
     return map.draw(shaderProgram);
   };
   lastTime = 0;
-  animate = function() {
-    var elapsed, timeNow;
-    timeNow = new Date().getTime();
-    if (lastTime !== 0) {
-      elapsed = timeNow - lastTime;
-      xRot += (90 * elapsed) / 1000.0;
-      yRot += (90 * elapsed) / 1000.0;
-      zRot += (90 * elapsed) / 1000.0;
-    }
-    return lastTime = timeNow;
-  };
   timeMs = function() {
     return new Date().getTime();
   };
   lastFrame = timeMs();
-  tick = function() {
+  logic = function() {
     var cammove, delta, now;
-    requestAnimFrame(tick);
     now = timeMs();
     delta = now - lastFrame;
     lastFrame = now;
     cammove = .55 * delta;
-    if (keyPressed(key.right)) {
-      camx -= cammove;
-    }
     if (keyPressed(key.left)) {
       camx += cammove;
     }
-    if (keyPressed(key.up)) {
-      camy -= cammove;
+    if (keyPressed(key.right)) {
+      camx -= cammove;
     }
-    if (keyPressed(key.down)) {
+    if (keyPressed(key.up)) {
       camy += cammove;
     }
-    drawScene();
-    return animate();
+    if (keyPressed(key.down)) {
+      return camy -= cammove;
+    }
+  };
+  tick = function() {
+    requestAnimFrame(tick);
+    logic();
+    return drawScene();
   };
   map = void 0;
   window.webGLStart = function() {
