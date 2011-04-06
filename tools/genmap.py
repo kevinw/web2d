@@ -1,10 +1,12 @@
 import random
+import os.path
 random.seed(1)
 
-
-w, h = 300, 200
+w, h = 100, 50
 numtiles = 24#12*10
-name = 'testmap.json'
+
+thisdir = os.path.abspath(os.path.dirname(__file__))
+name = os.path.join(thisdir, '..', 'data', 'testmap.json')
 
 def gen():
     m = []
