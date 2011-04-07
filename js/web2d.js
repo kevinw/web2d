@@ -1,5 +1,5 @@
 (function() {
-  var Buffer, Program, Texture, Tilemap, Tilemap2, animate, camx, camy, cubeVertexIndexBuffer, cubeVertexPositionBuffer, cubeVertexTextureCoordBuffer, degToRad, drawScene, endsWith, flatten, getShader, gl, gridVerts, initBuffers, initGL, initShaders, isPowerOfTwo, key, keyPressed, keys, lastFrame, lastTime, loadData, loadJSON, map, mvMatrix, mvMatrixStack, mvPopMatrix, mvPushMatrix, neheTexture, nextHighestPowerOfTwo, pMatrix, setMatrixUniforms, shaderProgram, tick, tilemap, timeMs, triangleStripGrid, triangleStripGrid2, uniformSetter, xRot, yRot, zRot, _linkProgramFromShaders;
+  var Buffer, FPSTimer, NUM_FRAMES_TO_AVERAGE, Program, Texture, Tilemap, camx, camy, degToRad, drawScene, endsWith, flatten, fps, getShader, gl, initGL, initShaders, isPowerOfTwo, key, keyPressed, keys, lastFrame, lastTime, loadData, loadJSON, logic, map, mvMatrix, mvMatrixStack, mvPopMatrix, mvPushMatrix, neheTexture, nextHighestPowerOfTwo, pMatrix, setMatrixUniforms, shaderProgram, tick, timeMs, uniformSetter, _linkProgramFromShaders;
   gl = void 0;
   key = {
     left: 37,
@@ -14,38 +14,39 @@
   document.onkeyup = function(e) {
     return keys[e.keyCode] = false;
   };
+  window.onblur = function(e) {
+    return keys = {};
+  };
   keyPressed = function(code) {
     return keys[code];
   };
   isPowerOfTwo = function(x) {
     return (x & (x - 1)) === 0;
   };
-  gridVerts = function(w, h, pixelWidth, pixelHeight) {
-    var buffer, x, y;
-    buffer = [];
-    for (y = 0; (0 <= h ? y <= h : y >= h); (0 <= h ? y += 1 : y -= 1)) {
-      for (x = 0; (0 <= w ? x <= w : x >= w); (0 <= w ? x += 1 : x -= 1)) {
-        buffer.push(x * pixelWidth);
-        buffer.push(y * pixelHeight);
+  NUM_FRAMES_TO_AVERAGE = 16;
+  FPSTimer = (function() {
+    function FPSTimer() {
+      var n, _ref;
+      this.totalTime = NUM_FRAMES_TO_AVERAGE;
+      this.timeTable = [];
+      for (n = 0, _ref = NUM_FRAMES_TO_AVERAGE - 1; (0 <= _ref ? n <= _ref : n >= _ref); (0 <= _ref ? n += 1 : n -= 1)) {
+        this.timeTable.push(1.0);
       }
+      this.timeTableCursor = 0;
     }
-    return buffer;
-  };
-  triangleStripGrid = function(w, h) {
-    var indices, n, x, _ref;
-    w += 1;
-    h += 1;
-    indices = [];
-    n = 0;
-    indices.push(n);
-    for (x = 0, _ref = w - 1; (0 <= _ref ? x <= _ref : x >= _ref); (0 <= _ref ? x += 1 : x -= 1)) {
-      n += w;
-      indices.push(n);
-      n -= w - 1;
-      indices.push(n);
-    }
-    return indices;
-  };
+    FPSTimer.prototype.update = function(elapsedTime) {
+      this.totalTime = this.totalTime + (elapsedTime - this.timeTable[this.timeTableCursor]);
+      this.timeTable[this.timeTableCursor] = elapsedTime;
+      this.timeTableCursor += 1;
+      if (this.timeTableCursor === NUM_FRAMES_TO_AVERAGE) {
+        this.timeTableCursor = 0;
+      }
+      this.instantaneousFPS = Math.floor(1.0 / elapsedTime + 0.5);
+      console.log('totalTime: ' + this.totalTime);
+      return this.averageFPS = Math.floor((1.0 / (this.totalTime / NUM_FRAMES_TO_AVERAGE)) + 0.5);
+    };
+    return FPSTimer;
+  })();
   loadData = function(url, callback, type) {
     var cb;
     cb = function(responseText, status, xhr) {
@@ -64,28 +65,8 @@
   loadJSON = function(url, callback) {
     return loadData(url, callback, 'json');
   };
-  triangleStripGrid2 = function(w, h, limit) {
-    var n, points, x, y, _ref, _ref2;
-    n = 0;
-    points = [];
-    for (y = 0, _ref = h * 2; (0 <= _ref ? y <= _ref : y >= _ref); (0 <= _ref ? y += 1 : y -= 1)) {
-      for (x = 0, _ref2 = w * 2 - 2; (0 <= _ref2 ? x <= _ref2 : x >= _ref2); (0 <= _ref2 ? x += 1 : x -= 1)) {
-        points.push(n);
-        if (x % 2 === 0) {
-          n += w;
-        } else {
-          n -= y % 2 === 0 ? h - 1 : h + 1;
-        }
-      }
-      points.push(n);
-    }
-    if (limit) {
-      points = points.slice(0, limit);
-    }
-    return points;
-  };
-  Tilemap2 = function(map, texinfo) {
-    var addtex, addvert, img, numTilesWide, row, s, t, texcoords, texheight, texwidth, tile, tileCoord, tileheight, tilewidth, verts, x, y, _i, _j, _len, _len2, _ref;
+  Tilemap = function(map, texinfo) {
+    var addTile, addtex, addvert, img, layer, layers, numTilesWide, row, texcoords, texheight, texwidth, tile, tileCoord, tileheight, tilewidth, verts, x, y, _i, _j, _k, _len, _len2, _len3, _ref;
     tilewidth = texinfo.tilewidth;
     tileheight = texinfo.tileheight;
     img = texinfo.texture.image;
@@ -93,75 +74,85 @@
     texheight = tileheight / img.height;
     numTilesWide = texinfo.tilesWide || parseInt(img.width / ((texinfo.tilegapx || 0) + tilewidth));
     tileCoord = function(tileIndex) {
-      return [tileIndex * (tilewidth + texinfo.tilegapx) / img.width, 0];
+      var y;
+      y = 0;
+      while (tileIndex > numTilesWide) {
+        tileIndex -= numTilesWide;
+        y += 1;
+      }
+      return [tileIndex * (tilewidth + texinfo.tilegapx) / img.width, y * (tileheight + texinfo.tilegapy) / img.height];
     };
-    console.log('texwidth:  ' + texwidth);
-    console.log('texheight: ' + texheight);
+    console.log('texwidth: ' + texwidth + ', texheight: ' + texheight);
     console.log('' + img.width + ' / ((' + (texinfo.tilegapx || 0) + ') + ' + tilewidth + '))');
     console.log('numTilesWide: ' + numTilesWide);
-    verts = [];
-    addvert = function(x, y) {
-      verts.push(x);
-      return verts.push(y);
-    };
-    texcoords = [];
-    addtex = function(s, t) {
-      texcoords.push(s);
-      return texcoords.push(t);
-    };
-    y = x = 0;
+    layers = [];
     for (_i = 0, _len = map.length; _i < _len; _i++) {
-      row = map[_i];
-      x = 0;
-      for (_j = 0, _len2 = row.length; _j < _len2; _j++) {
-        tile = row[_j];
-        if (tile !== 0) {
-          addvert(x * tilewidth, y * tileheight);
-          addvert(x * tilewidth + tilewidth, y * tileheight);
-          addvert(x * tilewidth + tilewidth, y * tileheight + tileheight);
-          addvert(x * tilewidth, y * tileheight);
-          addvert(x * tilewidth + tilewidth, y * tileheight + tileheight);
-          addvert(x * tilewidth, y * tileheight + tileheight);
-          _ref = tileCoord(tile - 1), s = _ref[0], t = _ref[1];
-          addtex(s, t);
-          addtex(s + texwidth, t);
-          addtex(s + texwidth, t + texheight);
-          addtex(s, t);
-          addtex(s + texwidth, t + texheight);
-          addtex(s, t + texheight);
+      layer = map[_i];
+      verts = [];
+      addvert = function(x, y) {
+        verts.push(x);
+        return verts.push(y);
+      };
+      texcoords = [];
+      addtex = function(s, t) {
+        texcoords.push(s);
+        return texcoords.push(t);
+      };
+      addTile = function(x, y, tile) {
+        var s, t, _ref;
+        addvert(x * tilewidth, y * tileheight);
+        addvert(x * tilewidth + tilewidth, y * tileheight);
+        addvert(x * tilewidth + tilewidth, y * tileheight + tileheight);
+        addvert(x * tilewidth, y * tileheight);
+        addvert(x * tilewidth + tilewidth, y * tileheight + tileheight);
+        addvert(x * tilewidth, y * tileheight + tileheight);
+        _ref = tileCoord(tile - 1), s = _ref[0], t = _ref[1];
+        addtex(s, t);
+        addtex(s + texwidth, t);
+        addtex(s + texwidth, t + texheight);
+        addtex(s, t);
+        addtex(s + texwidth, t + texheight);
+        return addtex(s, t + texheight);
+      };
+      y = x = 0;
+      _ref = layer.tiles;
+      for (_j = 0, _len2 = _ref.length; _j < _len2; _j++) {
+        row = _ref[_j];
+        x = 0;
+        for (_k = 0, _len3 = row.length; _k < _len3; _k++) {
+          tile = row[_k];
+          if (tile !== 0) {
+            addTile(x, y, tile);
+          }
+          x += 1;
         }
-        x += 1;
+        y += 1;
       }
-      y += 1;
+      console.log('verts.length: ' + verts.length);
+      console.log('texcoords.length: ' + texcoords.length);
+      layers.push({
+        verts: Buffer(2, gl.ARRAY_BUFFER, verts),
+        texcoords: Buffer(2, gl.ARRAY_BUFFER, texcoords),
+        distance: layer.distance
+      });
     }
-    console.log('verts.length: ' + verts.length);
-    console.log('texcoords.length: ' + texcoords.length);
-    verts = Buffer(2, gl.ARRAY_BUFFER, verts);
-    texcoords = Buffer(2, gl.ARRAY_BUFFER, texcoords);
     return {
-      draw: function(program) {
-        program.attrib.aVertexPosition(verts);
-        program.attrib.aTextureCoord(texcoords);
-        return verts.drawArrays(gl.TRIANGLES);
+      draw: function(program, x, y) {
+        var layer, layerMat, layerx, layery, _i, _len, _results;
+        _results = [];
+        for (_i = 0, _len = layers.length; _i < _len; _i++) {
+          layer = layers[_i];
+          layerx = x / layer.distance;
+          layery = y / layer.distance;
+          program.attrib.aVertexPosition(layer.verts);
+          program.attrib.aTextureCoord(layer.texcoords);
+          layerMat = mat4.create(mvMatrix);
+          mat4.translate(layerMat, [parseInt(layerx), parseInt(layery), 0]);
+          program.uniform.uMVMatrix(layerMat);
+          _results.push(layer.verts.drawArrays(gl.TRIANGLES));
+        }
+        return _results;
       }
-    };
-  };
-  Tilemap = function() {
-    var draw, grid, h, indices, tiles, w;
-    w = 4;
-    h = 4;
-    grid = Buffer(2, gl.ARRAY_BUFFER, gridVerts(w, h, 16, 16));
-    indices = Buffer(1, gl.ELEMENT_ARRAY_BUFFER, triangleStripGrid(w, h, 8));
-    tiles = Buffer(1, gl.ARRAY_BUFFER, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
-    draw = function(program) {
-      program.attrib.tileIndex(tiles);
-      program.attrib.aVertexPosition(grid);
-      return indices.drawElements(gl.TRIANGLE_STRIP);
-    };
-    return {
-      verts: grid,
-      indices: indices,
-      draw: draw
     };
   };
   nextHighestPowerOfTwo = function(x) {
@@ -394,6 +385,8 @@
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, texture.image);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, gl.CLAMP);
+      gl.texParameteri(gl.TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.CLAMP);
       gl.bindTexture(gl.TEXTURE_2D, null);
       if (cb) {
         return cb();
@@ -429,7 +422,7 @@
   };
   initGL = function(canvas) {
     try {
-      gl = canvas.getContext("experimental-webgl");
+      gl = WebGLUtils.setupWebGL(canvas);
       gl.viewportWidth = canvas.width;
       gl.viewportHeight = canvas.height;
     } catch (e) {
@@ -493,96 +486,69 @@
   degToRad = function(degrees) {
     return degrees * Math.PI / 180;
   };
-  cubeVertexPositionBuffer = void 0;
-  cubeVertexTextureCoordBuffer = void 0;
-  cubeVertexIndexBuffer = void 0;
-  tilemap = void 0;
-  initBuffers = function() {
-    tilemap = Tilemap();
-    cubeVertexPositionBuffer = Buffer(3, gl.ARRAY_BUFFER, [0, 0, 1.0, 16, 0, 1.0, 16, 16, 1.0, 0, 16, 1.0, -1.0, -1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, -1.0, -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0, 1.0, 1.0, -1.0, 1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, -1.0]);
-    cubeVertexTextureCoordBuffer = Buffer(2, gl.ARRAY_BUFFER, [0.0, 0.0, 0.0625, 0.0, 0.0625, 0.0625, 0.0, 0.0625, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0]);
-    return cubeVertexIndexBuffer = Buffer(1, gl.ELEMENT_ARRAY_BUFFER, [0, 1, 2, 0, 2, 3]);
-    /*
-            4, 5, 6,      4, 6, 7,    # Back face
-            8, 9, 10,     8, 10, 11,  # Top face
-            12, 13, 14,   12, 14, 15, # Bottom face
-            16, 17, 18,   16, 18, 19, # Right face
-            20, 21, 22,   20, 22, 23  # Left face
-        ])
-        */
-  };
-  xRot = 0;
-  yRot = 0;
-  zRot = 0;
   camx = 0;
   camy = 0;
   drawScene = function() {
+    var zoom;
     gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    mat4.ortho(0, gl.viewportWidth, gl.viewportHeight, 0, -1.0, 1.0, pMatrix);
+    zoom = 1;
+    mat4.ortho(0, gl.viewportWidth / zoom, gl.viewportHeight / zoom, 0, -1.0, 1.0, pMatrix);
     mat4.identity(mvMatrix);
-    mat4.translate(mvMatrix, [camx, camy, 0]);
-    shaderProgram.attrib.aVertexPosition(cubeVertexPositionBuffer);
-    shaderProgram.attrib.aTextureCoord(cubeVertexTextureCoordBuffer);
+    mat4.translate(mvMatrix, [parseInt(camx), parseInt(camy), 0]);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, neheTexture);
     shaderProgram.uniform.uSampler(0);
     setMatrixUniforms();
-    return map.draw(shaderProgram);
+    return map.draw(shaderProgram, camx, camy);
   };
+  fps = new FPSTimer();
+  console.log('fps.totalTime: ' + fps.totalTime);
   lastTime = 0;
-  animate = function() {
-    var elapsed, timeNow;
-    timeNow = new Date().getTime();
-    if (lastTime !== 0) {
-      elapsed = timeNow - lastTime;
-      xRot += (90 * elapsed) / 1000.0;
-      yRot += (90 * elapsed) / 1000.0;
-      zRot += (90 * elapsed) / 1000.0;
-    }
-    return lastTime = timeNow;
-  };
   timeMs = function() {
     return new Date().getTime();
   };
   lastFrame = timeMs();
-  tick = function() {
-    var cammove, delta, now;
-    requestAnimFrame(tick);
+  logic = function() {
+    var cammove, delta, fpsElem, now;
     now = timeMs();
     delta = now - lastFrame;
+    fps.update(delta * 0.001);
+    fpsElem = document.getElementById('fps');
+    if (fpsElem) {
+      fpsElem.innerHTML = fps.averageFPS + ' FPS';
+    }
     lastFrame = now;
     cammove = .55 * delta;
-    if (keyPressed(key.right)) {
-      camx -= cammove;
-    }
     if (keyPressed(key.left)) {
       camx += cammove;
     }
-    if (keyPressed(key.up)) {
-      camy -= cammove;
+    if (keyPressed(key.right)) {
+      camx -= cammove;
     }
-    if (keyPressed(key.down)) {
+    if (keyPressed(key.up)) {
       camy += cammove;
     }
-    drawScene();
-    return animate();
+    if (keyPressed(key.down)) {
+      return camy -= cammove;
+    }
+  };
+  tick = function() {
+    requestAnimFrame(tick);
+    logic();
+    return drawScene();
   };
   map = void 0;
   window.webGLStart = function() {
     var canvas;
-    console.log('----');
-    console.log(triangleStripGrid(2, 1));
-    console.log(gridVerts(2, 1, 16, 16));
     canvas = document.getElementById("lesson05-canvas");
     initGL(canvas);
     initShaders();
-    initBuffers();
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.disable(gl.DEPTH_TEST);
     return neheTexture = Texture('data/mariotiles.gif', function() {
       return loadJSON('data/testmap.json', function(x, err) {
-        map = Tilemap2(x, {
+        map = Tilemap(x, {
           texture: neheTexture,
           tilewidth: 16,
           tileheight: 16,
