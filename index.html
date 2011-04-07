@@ -4,6 +4,45 @@
 <title>web2d</title>
 <meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
 
+<style>
+    body {
+        text-align: center;
+        font-family: Arial;
+        font-size: 8pt;
+        margin: 0;
+    }
+
+    #canvasContainer h1 {
+        color: white;
+        margin: 0;
+        font-family: Monaco, Consolas, Courier New;
+        padding-bottom: 7px;
+        text-align: center;
+    }
+
+    #canvasContainer {
+        background: black;
+        padding: 20px;
+        background: -webkit-gradient(linear,0% 0,0% 100%,from(#000000),to(#300000))
+        width: 100%;
+    }
+
+    #canvasWrapper {
+        width: 800px;
+        margin: auto;
+    }
+
+    #fps {
+        text-align: right;
+        color: #353535;
+    }
+
+    #description {
+        padding-top: 10px;
+    }
+</style>
+
+
 <script type="text/javascript" src="lib/jquery-1.5.1.js"></script>
 <script type="text/javascript" src="lib/glMatrix-0.9.5.min.js"></script>
 <script type="text/javascript" src="lib/webgl-utils.js"></script>
@@ -40,15 +79,24 @@
     }
 </script>
 
-
 <script type="text/javascript" src="js/web2d.js"></script>
-
 
 </head>
 
 
 <body onload="webGLStart();">
-    <canvas id="lesson05-canvas" style="border: none;" width="500" height="500"></canvas>
+    <div id="canvasContainer">
+        <div id="canvasWrapper">
+            <h1>Web2D</h1>
+            <canvas id="lesson05-canvas" style="border: none;" width="800" height="450"></canvas>
+            <div style="" id="fps">0</div>
+        </div>
+    </div>
+    <div id="description">
+        Arrow keys to move. Requires a WebGL compatible browser.
+        <p>
+        <a href="http://github.com/kevinw/web2d">source</a>
+    </div>
 </body>
 
 </html>

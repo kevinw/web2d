@@ -9,37 +9,34 @@ key =
 keys = {}
 document.onkeydown = (e) -> keys[e.keyCode] = true
 document.onkeyup = (e) -> keys[e.keyCode] = false
+window.onblur = (e) -> keys = {}
 keyPressed = (code) -> return keys[code]
 
 isPowerOfTwo = (x) -> (x & (x - 1)) == 0
 
-gridVerts = (w, h, pixelWidth, pixelHeight) ->
-    buffer = []
+NUM_FRAMES_TO_AVERAGE = 16
+class FPSTimer
+    constructor: ->
+        @totalTime = NUM_FRAMES_TO_AVERAGE
+        @timeTable = []
+        for n in [0..NUM_FRAMES_TO_AVERAGE-1]
+            @timeTable.push(1.0)
+        @timeTableCursor = 0
 
-    for y in [0..h]
-        for x in [0..w]
-            buffer.push(x*pixelWidth)
-            buffer.push(y*pixelHeight)
+    update: (elapsedTime) ->
+        @totalTime = @totalTime + (elapsedTime - @timeTable[@timeTableCursor])
+        @timeTable[@timeTableCursor] = elapsedTime
+        @timeTableCursor += 1
+        if @timeTableCursor == NUM_FRAMES_TO_AVERAGE
+            @timeTableCursor = 0
 
-    return buffer
+        @instantaneousFPS = Math.floor(1.0 / elapsedTime + 0.5)
 
-triangleStripGrid = (w, h) ->
-    w += 1
-    h += 1
-    indices = []
-    
-    n = 0
-    indices.push(n)
+        console.log('totalTime: ' + @totalTime)
 
-    for x in [0..w-1]
-        n += w
-        indices.push(n)
+        @averageFPS = Math.floor(
+            (1.0 / (@totalTime / NUM_FRAMES_TO_AVERAGE)) + 0.5)
 
-        n -= w - 1
-        indices.push(n)
-
-    return indices
-    
 
 loadData = (url, callback, type) ->
     cb = (responseText, status, xhr) ->
@@ -55,27 +52,7 @@ loadData = (url, callback, type) ->
 
 loadJSON = (url, callback) -> loadData(url, callback, 'json')
 
-triangleStripGrid2 = (w, h, limit) ->
-    # thanks http://dan.lecocq.us/wordpress/2009/12/25/triangle-strip-for-grids-a-construction/
-    n = 0
-    points = []
-
-    for y in [0..h*2]
-        for x in [0..w*2-2]
-            points.push(n)
-            if x % 2 == 0
-                n += w
-            else
-                n -= if y % 2 == 0 then h-1 else h+1
-
-        points.push(n)
-
-    if limit
-        points = points.slice(0, limit)
-
-    return points
-
-Tilemap2 = (map, texinfo) ->
+Tilemap = (map, texinfo) ->
     tilewidth = texinfo.tilewidth
     tileheight = texinfo.tileheight
 
@@ -86,80 +63,80 @@ Tilemap2 = (map, texinfo) ->
 
     numTilesWide = texinfo.tilesWide || parseInt(img.width / ((texinfo.tilegapx || 0) + tilewidth))
     tileCoord = (tileIndex) ->
+        y = 0
+        while (tileIndex > numTilesWide)
+            tileIndex -= numTilesWide
+            y += 1
+
         return [tileIndex * (tilewidth + texinfo.tilegapx) / img.width,
-                0]
+                y * (tileheight + texinfo.tilegapy) / img.height]
 
-    console.log('texwidth:  ' + texwidth)
-    console.log('texheight: ' + texheight)
-
+    console.log('texwidth: ' + texwidth + ', texheight: '+ texheight)
     console.log('' + img.width + ' / ((' + (texinfo.tilegapx || 0) + ') + ' + tilewidth + '))')
-
     console.log('numTilesWide: ' + numTilesWide)
 
-    verts = []
-    addvert = (x, y) -> verts.push(x); verts.push(y)
+    layers = []
 
-    texcoords = []
-    addtex = (s, t) -> texcoords.push(s); texcoords.push(t)
+    for layer in map
+        verts = []
+        addvert = (x, y) -> verts.push(x); verts.push(y)
 
-    y = x = 0
-    for row in map
-        x = 0
-        for tile in row
-            if tile != 0
-                # vertices
-                addvert(x*tilewidth,             y*tileheight)
-                addvert(x*tilewidth + tilewidth, y*tileheight)
-                addvert(x*tilewidth + tilewidth, y*tileheight + tileheight)
+        texcoords = []
+        addtex = (s, t) -> texcoords.push(s); texcoords.push(t)
 
-                addvert(x*tilewidth,             y*tileheight)
-                addvert(x*tilewidth + tilewidth, y*tileheight + tileheight)
-                addvert(x*tilewidth,             y*tileheight + tileheight)
+        addTile = (x, y, tile) ->
+            # TODO: use indexes! there are a lot of shared verts/coords here.
+            # vertices
+            addvert(x*tilewidth,             y*tileheight)
+            addvert(x*tilewidth + tilewidth, y*tileheight)
+            addvert(x*tilewidth + tilewidth, y*tileheight + tileheight)
 
-                # texcoords
-                [s, t] = tileCoord(tile - 1)
-                addtex(s, t)
-                addtex(s + texwidth, t)
-                addtex(s + texwidth, t + texheight)
+            addvert(x*tilewidth,             y*tileheight)
+            addvert(x*tilewidth + tilewidth, y*tileheight + tileheight)
+            addvert(x*tilewidth,             y*tileheight + tileheight)
 
-                addtex(s, t)
-                addtex(s + texwidth, t + texheight)
-                addtex(s, t + texheight)
+            # texcoords
+            [s, t] = tileCoord(tile - 1)
+            addtex(s, t)
+            addtex(s + texwidth, t)
+            addtex(s + texwidth, t + texheight)
 
-            x +=1
+            addtex(s, t)
+            addtex(s + texwidth, t + texheight)
+            addtex(s, t + texheight)
 
-        y += 1
 
-    console.log('verts.length: ' + verts.length)
-    console.log('texcoords.length: ' + texcoords.length)
+        y = x = 0
+        for row in layer.tiles
+            x = 0
+            for tile in row
+                if tile != 0
+                    addTile(x, y, tile)
+                x +=1
+            y += 1
 
-    verts = Buffer(2, gl.ARRAY_BUFFER, verts)
-    texcoords = Buffer(2, gl.ARRAY_BUFFER, texcoords)
+        console.log('verts.length: ' + verts.length)
+        console.log('texcoords.length: ' + texcoords.length)
+
+        layers.push({
+            verts: Buffer(2, gl.ARRAY_BUFFER, verts)
+            texcoords: Buffer(2, gl.ARRAY_BUFFER, texcoords)
+            distance: layer.distance
+        })
 
     return {
-        draw: (program) ->
-            program.attrib.aVertexPosition(verts)
-            program.attrib.aTextureCoord(texcoords)
-            verts.drawArrays(gl.TRIANGLES)
+        draw: (program, x, y) ->
+            for layer in layers
+                layerx = x/layer.distance
+                layery = y/layer.distance
+                program.attrib.aVertexPosition(layer.verts)
+                program.attrib.aTextureCoord(layer.texcoords)
+
+                layerMat = mat4.create(mvMatrix)
+                mat4.translate(layerMat, [parseInt(layerx), parseInt(layery), 0])
+                program.uniform.uMVMatrix(layerMat)
+                layer.verts.drawArrays(gl.TRIANGLES)
     }
-
-
-Tilemap = ->
-    w = 4
-    h = 4
-    grid = Buffer(2, gl.ARRAY_BUFFER, gridVerts(w, h, 16, 16))
-    indices = Buffer(1, gl.ELEMENT_ARRAY_BUFFER, triangleStripGrid(w, h, 8))
-    tiles = Buffer(1, gl.ARRAY_BUFFER, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-
-    draw = (program) ->
-        program.attrib.tileIndex(tiles)
-        program.attrib.aVertexPosition(grid)
-        indices.drawElements(gl.TRIANGLE_STRIP)
-
-    return {
-       verts: grid
-       indices: indices
-       draw: draw}
 
 nextHighestPowerOfTwo = (x) ->
     --x
@@ -278,6 +255,8 @@ Texture = (src, cb) ->
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, texture.image)
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+        gl.texParameteri(gl.TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, gl.CLAMP)
+        gl.texParameteri(gl.TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.CLAMP)
         gl.bindTexture(gl.TEXTURE_2D, null)
 
         if cb
@@ -316,7 +295,7 @@ Buffer = (itemSize, arrayType, items) ->
 
 initGL = (canvas) ->
     try
-        gl = canvas.getContext("experimental-webgl")
+        gl = WebGLUtils.setupWebGL(canvas)
         gl.viewportWidth = canvas.width
         gl.viewportHeight = canvas.height
     catch e
@@ -385,196 +364,78 @@ setMatrixUniforms = ->
 degToRad = (degrees) ->
     degrees * Math.PI / 180
 
-cubeVertexPositionBuffer = undefined
-cubeVertexTextureCoordBuffer = undefined
-cubeVertexIndexBuffer = undefined
-
-tilemap = undefined
-
-initBuffers = ->
-
-    tilemap = Tilemap()
-
-    cubeVertexPositionBuffer = Buffer(3, gl.ARRAY_BUFFER, [
-        0, 0, 1.0,
-        16, 0, 1.0,
-        16, 16, 1.0,
-        0, 16, 1.0,
-
-        # Back face
-        -1.0, -1.0, -1.0,
-        -1.0,  1.0, -1.0,
-         1.0,  1.0, -1.0,
-         1.0, -1.0, -1.0,
-
-        # Top face
-        -1.0,  1.0, -1.0,
-        -1.0,  1.0,  1.0,
-         1.0,  1.0,  1.0,
-         1.0,  1.0, -1.0,
-
-        # Bottom face
-        -1.0, -1.0, -1.0,
-         1.0, -1.0, -1.0,
-         1.0, -1.0,  1.0,
-        -1.0, -1.0,  1.0,
-
-        # Right face
-         1.0, -1.0, -1.0,
-         1.0,  1.0, -1.0,
-         1.0,  1.0,  1.0,
-         1.0, -1.0,  1.0,
-
-        # Left face
-        -1.0, -1.0, -1.0,
-        -1.0, -1.0,  1.0,
-        -1.0,  1.0,  1.0,
-        -1.0,  1.0, -1.0,
-    ])
-
-    cubeVertexTextureCoordBuffer = Buffer(2, gl.ARRAY_BUFFER, [
-        # Front face
-      0.0, 0.0,
-      0.0625, 0.0,
-      0.0625, 0.0625,
-      0.0, 0.0625,
-
-      # Back face
-      1.0, 0.0,
-      1.0, 1.0,
-      0.0, 1.0,
-      0.0, 0.0,
-
-      # Top face
-      0.0, 1.0,
-      0.0, 0.0,
-      1.0, 0.0,
-      1.0, 1.0,
-
-      # Bottom face
-      1.0, 1.0,
-      0.0, 1.0,
-      0.0, 0.0,
-      1.0, 0.0,
-
-      # Right face
-      1.0, 0.0,
-      1.0, 1.0,
-      0.0, 1.0,
-      0.0, 0.0,
-
-      # Left face
-      0.0, 0.0,
-      1.0, 0.0,
-      1.0, 1.0,
-      0.0, 1.0,
-    ])
-
-    cubeVertexIndexBuffer = Buffer(1, gl.ELEMENT_ARRAY_BUFFER, [
-        0, 1, 2,      0, 2, 3,    # Front face
-    ])
-    ###
-        4, 5, 6,      4, 6, 7,    # Back face
-        8, 9, 10,     8, 10, 11,  # Top face
-        12, 13, 14,   12, 14, 15, # Bottom face
-        16, 17, 18,   16, 18, 19, # Right face
-        20, 21, 22,   20, 22, 23  # Left face
-    ])
-    ###
-
-
-xRot = 0
-yRot = 0
-zRot = 0
-
 camx = 0
 camy = 0
+
 
 drawScene = ->
     gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight)
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
     #mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix)
-    mat4.ortho(0, gl.viewportWidth, gl.viewportHeight, 0, -1.0, 1.0, pMatrix)
+    zoom = 1
+    mat4.ortho(0, gl.viewportWidth/zoom, gl.viewportHeight/zoom, 0, -1.0, 1.0, pMatrix)
     mat4.identity(mvMatrix)
-    mat4.translate(mvMatrix, [camx, camy, 0])
+    mat4.translate(mvMatrix, [parseInt(camx), parseInt(camy), 0])
     #mat4.translate(mvMatrix, [0.0, 0.0, -5.0])
 
     #mat4.rotate(mvMatrix, degToRad(xRot), [1, 0, 0])
     #mat4.rotate(mvMatrix, degToRad(yRot), [0, 1, 0])
     #mat4.rotate(mvMatrix, degToRad(zRot), [0, 0, 1])
 
-    shaderProgram.attrib.aVertexPosition(cubeVertexPositionBuffer)
-    shaderProgram.attrib.aTextureCoord(cubeVertexTextureCoordBuffer)
-
     gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_2D, neheTexture)
     shaderProgram.uniform.uSampler(0)
 
-    #setMatrixUniforms()
-    #cubeVertexIndexBuffer.drawElements(gl.TRIANGLES)
-
     #mat4.translate(mvMatrix, [0.0, 32.0, 0.0])
     setMatrixUniforms()
 
-    #tilemap.draw(shaderProgram)
-    map.draw(shaderProgram)
+    map.draw(shaderProgram, camx, camy)
 
 
-    
-
+fps = new FPSTimer()
+console.log('fps.totalTime: ' + fps.totalTime)
 lastTime = 0
-
-animate = ->
-    timeNow = new Date().getTime()
-    if lastTime != 0
-        elapsed = timeNow - lastTime
-
-        xRot += (90 * elapsed) / 1000.0
-        yRot += (90 * elapsed) / 1000.0
-        zRot += (90 * elapsed) / 1000.0
-
-    lastTime = timeNow
 
 timeMs = -> new Date().getTime()
 lastFrame = timeMs()
 
-tick = ->
-    requestAnimFrame(tick)
-
+logic = ->
     now = timeMs()
     delta = now - lastFrame
+
+    fps.update(delta * 0.001)
+    fpsElem = document.getElementById('fps')
+    if fpsElem then fpsElem.innerHTML = fps.averageFPS + ' FPS'
+
     lastFrame = now
 
     cammove = .55 * delta
 
-    if keyPressed(key.right) then camx -= cammove
     if keyPressed(key.left) then camx += cammove
-    if keyPressed(key.up) then camy -= cammove
-    if keyPressed(key.down) then camy += cammove
+    if keyPressed(key.right) then camx -= cammove
+    if keyPressed(key.up) then camy += cammove
+    if keyPressed(key.down) then camy -= cammove
 
+
+tick = ->
+    requestAnimFrame(tick)
+    logic()
     drawScene()
-    animate()
 
 map = undefined
 
 window.webGLStart = ->
-    console.log('----')
-    console.log(triangleStripGrid(2, 1))
-    console.log(gridVerts(2, 1, 16, 16))
-
     canvas = document.getElementById("lesson05-canvas")
     initGL(canvas)
     initShaders()
-    initBuffers()
-    #('nehe.gif')
 
     gl.clearColor(0.0, 0.0, 0.0, 1.0)
     gl.disable(gl.DEPTH_TEST)
 
     neheTexture = Texture('data/mariotiles.gif', ->
         loadJSON('data/testmap.json', (x, err) ->
-            map = Tilemap2(x, {
+            map = Tilemap(x, {
                 texture: neheTexture,
                 tilewidth: 16,
                 tileheight: 16,
@@ -584,5 +445,4 @@ window.webGLStart = ->
             tick()
         )
     )
-
 
