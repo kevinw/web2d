@@ -9,6 +9,7 @@ key =
 keys = {}
 document.onkeydown = (e) -> keys[e.keyCode] = true
 document.onkeyup = (e) -> keys[e.keyCode] = false
+window.onblur = (e) -> keys = {}
 keyPressed = (code) -> return keys[code]
 
 isPowerOfTwo = (x) -> (x & (x - 1)) == 0
@@ -94,60 +95,72 @@ Tilemap2 = (map, texinfo) ->
         return [tileIndex * (tilewidth + texinfo.tilegapx) / img.width,
                 y * (tileheight + texinfo.tilegapy) / img.height]
 
-    console.log('texwidth:  ' + texwidth)
-    console.log('texheight: ' + texheight)
-
+    console.log('texwidth: ' + texwidth + ', texheight: '+ texheight)
     console.log('' + img.width + ' / ((' + (texinfo.tilegapx || 0) + ') + ' + tilewidth + '))')
-
     console.log('numTilesWide: ' + numTilesWide)
 
-    verts = []
-    addvert = (x, y) -> verts.push(x); verts.push(y)
+    layers = []
 
-    texcoords = []
-    addtex = (s, t) -> texcoords.push(s); texcoords.push(t)
+    for layer in map
+        verts = []
+        addvert = (x, y) -> verts.push(x); verts.push(y)
 
-    y = x = 0
-    for row in map
-        x = 0
-        for tile in row
-            if tile != 0
-                # vertices
-                addvert(x*tilewidth,             y*tileheight)
-                addvert(x*tilewidth + tilewidth, y*tileheight)
-                addvert(x*tilewidth + tilewidth, y*tileheight + tileheight)
+        texcoords = []
+        addtex = (s, t) -> texcoords.push(s); texcoords.push(t)
 
-                addvert(x*tilewidth,             y*tileheight)
-                addvert(x*tilewidth + tilewidth, y*tileheight + tileheight)
-                addvert(x*tilewidth,             y*tileheight + tileheight)
+        addTile = (x, y, tile) ->
+            # TODO: use indexes! there are a lot of shared verts/coords here.
+            # vertices
+            addvert(x*tilewidth,             y*tileheight)
+            addvert(x*tilewidth + tilewidth, y*tileheight)
+            addvert(x*tilewidth + tilewidth, y*tileheight + tileheight)
 
-                # texcoords
-                [s, t] = tileCoord(tile - 1)
-                addtex(s, t)
-                addtex(s + texwidth, t)
-                addtex(s + texwidth, t + texheight)
+            addvert(x*tilewidth,             y*tileheight)
+            addvert(x*tilewidth + tilewidth, y*tileheight + tileheight)
+            addvert(x*tilewidth,             y*tileheight + tileheight)
 
-                addtex(s, t)
-                addtex(s + texwidth, t + texheight)
-                addtex(s, t + texheight)
+            # texcoords
+            [s, t] = tileCoord(tile - 1)
+            addtex(s, t)
+            addtex(s + texwidth, t)
+            addtex(s + texwidth, t + texheight)
 
-            x +=1
+            addtex(s, t)
+            addtex(s + texwidth, t + texheight)
+            addtex(s, t + texheight)
 
-        y += 1
 
-    console.log('verts.length: ' + verts.length)
-    console.log('texcoords.length: ' + texcoords.length)
+        y = x = 0
+        for row in layer.tiles
+            x = 0
+            for tile in row
+                if tile != 0
+                    addTile(x, y, tile)
+                x +=1
+            y += 1
 
-    verts = Buffer(2, gl.ARRAY_BUFFER, verts)
-    texcoords = Buffer(2, gl.ARRAY_BUFFER, texcoords)
+        console.log('verts.length: ' + verts.length)
+        console.log('texcoords.length: ' + texcoords.length)
+
+        layers.push({
+            verts: Buffer(2, gl.ARRAY_BUFFER, verts)
+            texcoords: Buffer(2, gl.ARRAY_BUFFER, texcoords)
+            distance: layer.distance
+        })
 
     return {
-        draw: (program) ->
-            program.attrib.aVertexPosition(verts)
-            program.attrib.aTextureCoord(texcoords)
-            verts.drawArrays(gl.TRIANGLES)
-    }
+        draw: (program, x, y) ->
+            for layer in layers
+                layerx = x/layer.distance
+                layery = y/layer.distance
+                program.attrib.aVertexPosition(layer.verts)
+                program.attrib.aTextureCoord(layer.texcoords)
 
+                layerMat = mat4.create(mvMatrix)
+                mat4.translate(layerMat, [parseInt(layerx), parseInt(layery), 0])
+                shaderProgram.uniform.uMVMatrix(layerMat)
+                layer.verts.drawArrays(gl.TRIANGLES)
+    }
 
 Tilemap = ->
     w = 4
@@ -400,7 +413,8 @@ drawScene = ->
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
     #mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix)
-    mat4.ortho(0, gl.viewportWidth/2, gl.viewportHeight/2, 0, -1.0, 1.0, pMatrix)
+    zoom = 1
+    mat4.ortho(0, gl.viewportWidth/zoom, gl.viewportHeight/zoom, 0, -1.0, 1.0, pMatrix)
     mat4.identity(mvMatrix)
     mat4.translate(mvMatrix, [parseInt(camx), parseInt(camy), 0])
     #mat4.translate(mvMatrix, [0.0, 0.0, -5.0])
@@ -416,7 +430,7 @@ drawScene = ->
     #mat4.translate(mvMatrix, [0.0, 32.0, 0.0])
     setMatrixUniforms()
 
-    map.draw(shaderProgram)
+    map.draw(shaderProgram, camx, camy)
 
 
 lastTime = 0
@@ -452,7 +466,6 @@ window.webGLStart = ->
     canvas = document.getElementById("lesson05-canvas")
     initGL(canvas)
     initShaders()
-    #('nehe.gif')
 
     gl.clearColor(0.0, 0.0, 0.0, 1.0)
     gl.disable(gl.DEPTH_TEST)
@@ -469,5 +482,4 @@ window.webGLStart = ->
             tick()
         )
     )
-
 
