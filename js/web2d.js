@@ -1,5 +1,5 @@
 (function() {
-  var Buffer, FPSTimer, NUM_FRAMES_TO_AVERAGE, Program, Texture, Tilemap, camx, camy, degToRad, drawScene, endsWith, flatten, fps, getShader, gl, initGL, initShaders, isPowerOfTwo, key, keyPressed, keys, lastFrame, lastTime, loadData, loadJSON, logic, map, mvMatrix, mvMatrixStack, mvPopMatrix, mvPushMatrix, neheTexture, nextHighestPowerOfTwo, pMatrix, setMatrixUniforms, shaderProgram, tick, timeMs, uniformSetter, _linkProgramFromShaders;
+  var Buffer, FPSTimer, NUM_FRAMES_TO_AVERAGE, Program, Texture, Tilemap, beginMs, camx, camy, degToRad, drawScene, endsWith, flatten, fps, getShader, gl, initGL, initShaders, isPowerOfTwo, key, keyPressed, keys, lastFrame, lastTime, loadData, loadJSON, logic, map, mvMatrix, mvMatrixStack, mvPopMatrix, mvPushMatrix, neheTexture, nextHighestPowerOfTwo, pMatrix, setMatrixUniforms, shaderProgram, tick, timeMs, uniformSetter, warp, _linkProgramFromShaders;
   gl = void 0;
   key = {
     left: 37,
@@ -42,7 +42,6 @@
         this.timeTableCursor = 0;
       }
       this.instantaneousFPS = Math.floor(1.0 / elapsedTime + 0.5);
-      console.log('totalTime: ' + this.totalTime);
       return this.averageFPS = Math.floor((1.0 / (this.totalTime / NUM_FRAMES_TO_AVERAGE)) + 0.5);
     };
     return FPSTimer;
@@ -503,12 +502,13 @@
     return map.draw(shaderProgram, camx, camy);
   };
   fps = new FPSTimer();
-  console.log('fps.totalTime: ' + fps.totalTime);
   lastTime = 0;
   timeMs = function() {
     return new Date().getTime();
   };
   lastFrame = timeMs();
+  beginMs = timeMs();
+  warp = 0;
   logic = function() {
     var cammove, delta, fpsElem, now;
     now = timeMs();
@@ -518,6 +518,8 @@
     if (fpsElem) {
       fpsElem.innerHTML = fps.averageFPS + ' FPS';
     }
+    shaderProgram.uniform.time((now - beginMs) / 1000);
+    shaderProgram.uniform.warp(warp);
     lastFrame = now;
     cammove = .55 * delta;
     if (keyPressed(key.left)) {
@@ -541,9 +543,12 @@
   map = void 0;
   window.webGLStart = function() {
     var canvas;
-    canvas = document.getElementById("lesson05-canvas");
+    canvas = document.getElementById("main-canvas");
     initGL(canvas);
     initShaders();
+    $("#warp").change(function() {
+      return warp = warp ? 0.0 : 1.0;
+    });
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.disable(gl.DEPTH_TEST);
     return neheTexture = Texture('data/mariotiles.gif', function() {
