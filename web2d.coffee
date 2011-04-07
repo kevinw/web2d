@@ -32,8 +32,6 @@ class FPSTimer
 
         @instantaneousFPS = Math.floor(1.0 / elapsedTime + 0.5)
 
-        console.log('totalTime: ' + @totalTime)
-
         @averageFPS = Math.floor(
             (1.0 / (@totalTime / NUM_FRAMES_TO_AVERAGE)) + 0.5)
 
@@ -394,11 +392,15 @@ drawScene = ->
 
 
 fps = new FPSTimer()
-console.log('fps.totalTime: ' + fps.totalTime)
 lastTime = 0
 
 timeMs = -> new Date().getTime()
 lastFrame = timeMs()
+
+beginMs = timeMs()
+
+
+warp = 0
 
 logic = ->
     now = timeMs()
@@ -407,6 +409,9 @@ logic = ->
     fps.update(delta * 0.001)
     fpsElem = document.getElementById('fps')
     if fpsElem then fpsElem.innerHTML = fps.averageFPS + ' FPS'
+
+    shaderProgram.uniform.time((now-beginMs)/1000)
+    shaderProgram.uniform.warp(warp)
 
     lastFrame = now
 
@@ -426,9 +431,12 @@ tick = ->
 map = undefined
 
 window.webGLStart = ->
-    canvas = document.getElementById("lesson05-canvas")
+    canvas = document.getElementById("main-canvas")
     initGL(canvas)
     initShaders()
+
+    $("#warp").change ->
+        warp = if warp then 0.0 else 1.0
 
     gl.clearColor(0.0, 0.0, 0.0, 1.0)
     gl.disable(gl.DEPTH_TEST)
