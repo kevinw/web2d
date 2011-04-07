@@ -87,8 +87,8 @@ Tilemap2 = (map, texinfo) ->
     numTilesWide = texinfo.tilesWide || parseInt(img.width / ((texinfo.tilegapx || 0) + tilewidth))
     tileCoord = (tileIndex) ->
         y = 0
-        while (tileIndex > texinfo.tilesWide)
-            tileIndex -= texinfo.tilesWide
+        while (tileIndex > numTilesWide)
+            tileIndex -= numTilesWide
             y += 1
 
         return [tileIndex * (tilewidth + texinfo.tilegapx) / img.width,
@@ -283,6 +283,8 @@ Texture = (src, cb) ->
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, texture.image)
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+        gl.texParameteri(gl.TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, gl.CLAMP)
+        gl.texParameteri(gl.TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.CLAMP)
         gl.bindTexture(gl.TEXTURE_2D, null)
 
         if cb
@@ -400,7 +402,7 @@ drawScene = ->
     #mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix)
     mat4.ortho(0, gl.viewportWidth/2, gl.viewportHeight/2, 0, -1.0, 1.0, pMatrix)
     mat4.identity(mvMatrix)
-    mat4.translate(mvMatrix, [camx, camy, 0])
+    mat4.translate(mvMatrix, [parseInt(camx), parseInt(camy), 0])
     #mat4.translate(mvMatrix, [0.0, 0.0, -5.0])
 
     #mat4.rotate(mvMatrix, degToRad(xRot), [1, 0, 0])
