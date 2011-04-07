@@ -1,5 +1,5 @@
 (function() {
-  var Buffer, Program, Texture, Tilemap, Tilemap2, camx, camy, cubeVertexIndexBuffer, cubeVertexPositionBuffer, cubeVertexTextureCoordBuffer, degToRad, drawScene, endsWith, flatten, getShader, gl, gridVerts, initBuffers, initGL, initShaders, isPowerOfTwo, key, keyPressed, keys, lastFrame, lastTime, loadData, loadJSON, logic, map, mvMatrix, mvMatrixStack, mvPopMatrix, mvPushMatrix, neheTexture, nextHighestPowerOfTwo, pMatrix, setMatrixUniforms, shaderProgram, tick, tilemap, timeMs, triangleStripGrid, triangleStripGrid2, uniformSetter, xRot, yRot, zRot, _linkProgramFromShaders;
+  var Buffer, Program, Texture, Tilemap, Tilemap2, camx, camy, degToRad, drawScene, endsWith, flatten, getShader, gl, gridVerts, initGL, initShaders, isPowerOfTwo, key, keyPressed, keys, lastFrame, lastTime, loadData, loadJSON, logic, map, mvMatrix, mvMatrixStack, mvPopMatrix, mvPushMatrix, neheTexture, nextHighestPowerOfTwo, pMatrix, setMatrixUniforms, shaderProgram, tick, timeMs, triangleStripGrid, triangleStripGrid2, uniformSetter, _linkProgramFromShaders;
   gl = void 0;
   key = {
     left: 37,
@@ -13,6 +13,9 @@
   };
   document.onkeyup = function(e) {
     return keys[e.keyCode] = false;
+  };
+  window.onblur = function(e) {
+    return keys = {};
   };
   keyPressed = function(code) {
     return keys[code];
@@ -85,7 +88,7 @@
     return points;
   };
   Tilemap2 = function(map, texinfo) {
-    var addtex, addvert, img, numTilesWide, row, s, t, texcoords, texheight, texwidth, tile, tileCoord, tileheight, tilewidth, verts, x, y, _i, _j, _len, _len2, _ref;
+    var addTile, addtex, addvert, img, layer, layers, numTilesWide, row, texcoords, texheight, texwidth, tile, tileCoord, tileheight, tilewidth, verts, x, y, _i, _j, _k, _len, _len2, _len3, _ref;
     tilewidth = texinfo.tilewidth;
     tileheight = texinfo.tileheight;
     img = texinfo.texture.image;
@@ -95,60 +98,82 @@
     tileCoord = function(tileIndex) {
       var y;
       y = 0;
-      while (tileIndex > texinfo.tilesWide) {
-        tileIndex -= texinfo.tilesWide;
+      while (tileIndex > numTilesWide) {
+        tileIndex -= numTilesWide;
         y += 1;
       }
       return [tileIndex * (tilewidth + texinfo.tilegapx) / img.width, y * (tileheight + texinfo.tilegapy) / img.height];
     };
-    console.log('texwidth:  ' + texwidth);
-    console.log('texheight: ' + texheight);
+    console.log('texwidth: ' + texwidth + ', texheight: ' + texheight);
     console.log('' + img.width + ' / ((' + (texinfo.tilegapx || 0) + ') + ' + tilewidth + '))');
     console.log('numTilesWide: ' + numTilesWide);
-    verts = [];
-    addvert = function(x, y) {
-      verts.push(x);
-      return verts.push(y);
-    };
-    texcoords = [];
-    addtex = function(s, t) {
-      texcoords.push(s);
-      return texcoords.push(t);
-    };
-    y = x = 0;
+    layers = [];
     for (_i = 0, _len = map.length; _i < _len; _i++) {
-      row = map[_i];
-      x = 0;
-      for (_j = 0, _len2 = row.length; _j < _len2; _j++) {
-        tile = row[_j];
-        if (tile !== 0) {
-          addvert(x * tilewidth, y * tileheight);
-          addvert(x * tilewidth + tilewidth, y * tileheight);
-          addvert(x * tilewidth + tilewidth, y * tileheight + tileheight);
-          addvert(x * tilewidth, y * tileheight);
-          addvert(x * tilewidth + tilewidth, y * tileheight + tileheight);
-          addvert(x * tilewidth, y * tileheight + tileheight);
-          _ref = tileCoord(tile - 1), s = _ref[0], t = _ref[1];
-          addtex(s, t);
-          addtex(s + texwidth, t);
-          addtex(s + texwidth, t + texheight);
-          addtex(s, t);
-          addtex(s + texwidth, t + texheight);
-          addtex(s, t + texheight);
+      layer = map[_i];
+      verts = [];
+      addvert = function(x, y) {
+        verts.push(x);
+        return verts.push(y);
+      };
+      texcoords = [];
+      addtex = function(s, t) {
+        texcoords.push(s);
+        return texcoords.push(t);
+      };
+      addTile = function(x, y, tile) {
+        var s, t, _ref;
+        addvert(x * tilewidth, y * tileheight);
+        addvert(x * tilewidth + tilewidth, y * tileheight);
+        addvert(x * tilewidth + tilewidth, y * tileheight + tileheight);
+        addvert(x * tilewidth, y * tileheight);
+        addvert(x * tilewidth + tilewidth, y * tileheight + tileheight);
+        addvert(x * tilewidth, y * tileheight + tileheight);
+        _ref = tileCoord(tile - 1), s = _ref[0], t = _ref[1];
+        addtex(s, t);
+        addtex(s + texwidth, t);
+        addtex(s + texwidth, t + texheight);
+        addtex(s, t);
+        addtex(s + texwidth, t + texheight);
+        return addtex(s, t + texheight);
+      };
+      y = x = 0;
+      _ref = layer.tiles;
+      for (_j = 0, _len2 = _ref.length; _j < _len2; _j++) {
+        row = _ref[_j];
+        x = 0;
+        for (_k = 0, _len3 = row.length; _k < _len3; _k++) {
+          tile = row[_k];
+          if (tile !== 0) {
+            addTile(x, y, tile);
+          }
+          x += 1;
         }
-        x += 1;
+        y += 1;
       }
-      y += 1;
+      console.log('verts.length: ' + verts.length);
+      console.log('texcoords.length: ' + texcoords.length);
+      layers.push({
+        verts: Buffer(2, gl.ARRAY_BUFFER, verts),
+        texcoords: Buffer(2, gl.ARRAY_BUFFER, texcoords),
+        distance: layer.distance
+      });
     }
-    console.log('verts.length: ' + verts.length);
-    console.log('texcoords.length: ' + texcoords.length);
-    verts = Buffer(2, gl.ARRAY_BUFFER, verts);
-    texcoords = Buffer(2, gl.ARRAY_BUFFER, texcoords);
     return {
-      draw: function(program) {
-        program.attrib.aVertexPosition(verts);
-        program.attrib.aTextureCoord(texcoords);
-        return verts.drawArrays(gl.TRIANGLES);
+      draw: function(program, x, y) {
+        var layer, layerMat, layerx, layery, _i, _len, _results;
+        _results = [];
+        for (_i = 0, _len = layers.length; _i < _len; _i++) {
+          layer = layers[_i];
+          layerx = x / layer.distance;
+          layery = y / layer.distance;
+          program.attrib.aVertexPosition(layer.verts);
+          program.attrib.aTextureCoord(layer.texcoords);
+          layerMat = mat4.create(mvMatrix);
+          mat4.translate(layerMat, [parseInt(layerx), parseInt(layery), 0]);
+          shaderProgram.uniform.uMVMatrix(layerMat);
+          _results.push(layer.verts.drawArrays(gl.TRIANGLES));
+        }
+        return _results;
       }
     };
   };
@@ -400,6 +425,8 @@
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, texture.image);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, gl.CLAMP);
+      gl.texParameteri(gl.TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.CLAMP);
       gl.bindTexture(gl.TEXTURE_2D, null);
       if (cb) {
         return cb();
@@ -499,42 +526,21 @@
   degToRad = function(degrees) {
     return degrees * Math.PI / 180;
   };
-  cubeVertexPositionBuffer = void 0;
-  cubeVertexTextureCoordBuffer = void 0;
-  cubeVertexIndexBuffer = void 0;
-  tilemap = void 0;
-  initBuffers = function() {
-    tilemap = Tilemap();
-    cubeVertexPositionBuffer = Buffer(3, gl.ARRAY_BUFFER, [0, 0, 1.0, 16, 0, 1.0, 16, 16, 1.0, 0, 16, 1.0, -1.0, -1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, -1.0, -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0, 1.0, 1.0, -1.0, 1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, -1.0]);
-    cubeVertexTextureCoordBuffer = Buffer(2, gl.ARRAY_BUFFER, [0.0, 0.0, 0.0625, 0.0, 0.0625, 0.0625, 0.0, 0.0625, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0]);
-    return cubeVertexIndexBuffer = Buffer(1, gl.ELEMENT_ARRAY_BUFFER, [0, 1, 2, 0, 2, 3]);
-    /*
-            4, 5, 6,      4, 6, 7,    # Back face
-            8, 9, 10,     8, 10, 11,  # Top face
-            12, 13, 14,   12, 14, 15, # Bottom face
-            16, 17, 18,   16, 18, 19, # Right face
-            20, 21, 22,   20, 22, 23  # Left face
-        ])
-        */
-  };
-  xRot = 0;
-  yRot = 0;
-  zRot = 0;
   camx = 0;
   camy = 0;
   drawScene = function() {
+    var zoom;
     gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    mat4.ortho(0, gl.viewportWidth / 2, gl.viewportHeight / 2, 0, -1.0, 1.0, pMatrix);
+    zoom = 1;
+    mat4.ortho(0, gl.viewportWidth / zoom, gl.viewportHeight / zoom, 0, -1.0, 1.0, pMatrix);
     mat4.identity(mvMatrix);
-    mat4.translate(mvMatrix, [camx, camy, 0]);
-    shaderProgram.attrib.aVertexPosition(cubeVertexPositionBuffer);
-    shaderProgram.attrib.aTextureCoord(cubeVertexTextureCoordBuffer);
+    mat4.translate(mvMatrix, [parseInt(camx), parseInt(camy), 0]);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, neheTexture);
     shaderProgram.uniform.uSampler(0);
     setMatrixUniforms();
-    return map.draw(shaderProgram);
+    return map.draw(shaderProgram, camx, camy);
   };
   lastTime = 0;
   timeMs = function() {
@@ -574,7 +580,6 @@
     canvas = document.getElementById("lesson05-canvas");
     initGL(canvas);
     initShaders();
-    initBuffers();
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.disable(gl.DEPTH_TEST);
     return neheTexture = Texture('data/mariotiles.gif', function() {
