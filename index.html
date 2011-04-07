@@ -22,7 +22,7 @@
 
     #canvasContainer {
         background: black;
-        padding: 20px;
+        padding: 8px;
         background: -webkit-gradient(linear,0% 0,0% 100%,from(#000000),to(#300000))
         width: 100%;
     }
@@ -65,17 +65,18 @@
     attribute vec3 aVertexPosition;
     attribute vec2 aTextureCoord;
 
-    attribute float tileIndex;
-
     uniform mat4 uMVMatrix;
     uniform mat4 uPMatrix;
+    uniform float time;
+    uniform float warp;
 
     varying vec2 vTextureCoord;
 
     void main(void) {
-        gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+        float x = aVertexPosition.x + warp * floor(sin(time + aVertexPosition.x) * 3.0);
+        float y = aVertexPosition.y + warp * floor(cos(time + aVertexPosition.y) * 3.0);
+        gl_Position = uPMatrix * uMVMatrix * vec4(x, y, 0.0, 1.0);
         vTextureCoord = aTextureCoord;
-        tileIndex;
     }
 </script>
 
@@ -94,6 +95,8 @@
     </div>
     <div id="description">
         Arrow keys to move. Requires a WebGL compatible browser.
+        <p>
+        <form><input name="warp" id="warp" type="checkbox">warp</input></form>
         <p>
         <a href="http://github.com/kevinw/web2d">source</a>
     </div>
