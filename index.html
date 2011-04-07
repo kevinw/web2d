@@ -17,12 +17,24 @@
         margin: 0;
         font-family: Monaco, Consolas, Courier New;
         padding-bottom: 7px;
+        text-align: center;
     }
 
     #canvasContainer {
         background: black;
         padding: 20px;
         background: -webkit-gradient(linear,0% 0,0% 100%,from(#000000),to(#300000))
+        width: 100%;
+    }
+
+    #canvasWrapper {
+        width: 800px;
+        margin: auto;
+    }
+
+    #fps {
+        text-align: right;
+        color: #353535;
     }
 
     #description {
@@ -74,8 +86,11 @@
 
 <body onload="webGLStart();">
     <div id="canvasContainer">
-        <h1>Web2D</h1>
-        <canvas id="lesson05-canvas" style="border: none;" width="800" height="450"></canvas>
+        <div id="canvasWrapper">
+            <h1>Web2D</h1>
+            <canvas id="lesson05-canvas" style="border: none;" width="800" height="450"></canvas>
+            <div style="" id="fps">0</div>
+        </div>
     </div>
     <div id="description">
         Arrow keys to move. Requires a WebGL compatible browser.

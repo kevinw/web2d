@@ -14,33 +14,29 @@ keyPressed = (code) -> return keys[code]
 
 isPowerOfTwo = (x) -> (x & (x - 1)) == 0
 
-gridVerts = (w, h, pixelWidth, pixelHeight) ->
-    buffer = []
+NUM_FRAMES_TO_AVERAGE = 16
+class FPSTimer
+    constructor: ->
+        @totalTime = NUM_FRAMES_TO_AVERAGE
+        @timeTable = []
+        for n in [0..NUM_FRAMES_TO_AVERAGE-1]
+            @timeTable.push(1.0)
+        @timeTableCursor = 0
 
-    for y in [0..h]
-        for x in [0..w]
-            buffer.push(x*pixelWidth)
-            buffer.push(y*pixelHeight)
+    update: (elapsedTime) ->
+        @totalTime = @totalTime + (elapsedTime - @timeTable[@timeTableCursor])
+        @timeTable[@timeTableCursor] = elapsedTime
+        @timeTableCursor += 1
+        if @timeTableCursor == NUM_FRAMES_TO_AVERAGE
+            @timeTableCursor = 0
 
-    return buffer
+        @instantaneousFPS = Math.floor(1.0 / elapsedTime + 0.5)
 
-triangleStripGrid = (w, h) ->
-    w += 1
-    h += 1
-    indices = []
-    
-    n = 0
-    indices.push(n)
+        console.log('totalTime: ' + @totalTime)
 
-    for x in [0..w-1]
-        n += w
-        indices.push(n)
+        @averageFPS = Math.floor(
+            (1.0 / (@totalTime / NUM_FRAMES_TO_AVERAGE)) + 0.5)
 
-        n -= w - 1
-        indices.push(n)
-
-    return indices
-    
 
 loadData = (url, callback, type) ->
     cb = (responseText, status, xhr) ->
@@ -56,27 +52,7 @@ loadData = (url, callback, type) ->
 
 loadJSON = (url, callback) -> loadData(url, callback, 'json')
 
-triangleStripGrid2 = (w, h, limit) ->
-    # thanks http://dan.lecocq.us/wordpress/2009/12/25/triangle-strip-for-grids-a-construction/
-    n = 0
-    points = []
-
-    for y in [0..h*2]
-        for x in [0..w*2-2]
-            points.push(n)
-            if x % 2 == 0
-                n += w
-            else
-                n -= if y % 2 == 0 then h-1 else h+1
-
-        points.push(n)
-
-    if limit
-        points = points.slice(0, limit)
-
-    return points
-
-Tilemap2 = (map, texinfo) ->
+Tilemap = (map, texinfo) ->
     tilewidth = texinfo.tilewidth
     tileheight = texinfo.tileheight
 
@@ -158,26 +134,9 @@ Tilemap2 = (map, texinfo) ->
 
                 layerMat = mat4.create(mvMatrix)
                 mat4.translate(layerMat, [parseInt(layerx), parseInt(layery), 0])
-                shaderProgram.uniform.uMVMatrix(layerMat)
+                program.uniform.uMVMatrix(layerMat)
                 layer.verts.drawArrays(gl.TRIANGLES)
     }
-
-Tilemap = ->
-    w = 4
-    h = 4
-    grid = Buffer(2, gl.ARRAY_BUFFER, gridVerts(w, h, 16, 16))
-    indices = Buffer(1, gl.ELEMENT_ARRAY_BUFFER, triangleStripGrid(w, h, 8))
-    tiles = Buffer(1, gl.ARRAY_BUFFER, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-
-    draw = (program) ->
-        program.attrib.tileIndex(tiles)
-        program.attrib.aVertexPosition(grid)
-        indices.drawElements(gl.TRIANGLE_STRIP)
-
-    return {
-       verts: grid
-       indices: indices
-       draw: draw}
 
 nextHighestPowerOfTwo = (x) ->
     --x
@@ -336,7 +295,7 @@ Buffer = (itemSize, arrayType, items) ->
 
 initGL = (canvas) ->
     try
-        gl = canvas.getContext("experimental-webgl")
+        gl = WebGLUtils.setupWebGL(canvas)
         gl.viewportWidth = canvas.width
         gl.viewportHeight = canvas.height
     catch e
@@ -408,6 +367,7 @@ degToRad = (degrees) ->
 camx = 0
 camy = 0
 
+
 drawScene = ->
     gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight)
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
@@ -433,6 +393,8 @@ drawScene = ->
     map.draw(shaderProgram, camx, camy)
 
 
+fps = new FPSTimer()
+console.log('fps.totalTime: ' + fps.totalTime)
 lastTime = 0
 
 timeMs = -> new Date().getTime()
@@ -441,6 +403,11 @@ lastFrame = timeMs()
 logic = ->
     now = timeMs()
     delta = now - lastFrame
+
+    fps.update(delta * 0.001)
+    fpsElem = document.getElementById('fps')
+    if fpsElem then fpsElem.innerHTML = fps.averageFPS + ' FPS'
+
     lastFrame = now
 
     cammove = .55 * delta
@@ -459,10 +426,6 @@ tick = ->
 map = undefined
 
 window.webGLStart = ->
-    console.log('----')
-    console.log(triangleStripGrid(2, 1))
-    console.log(gridVerts(2, 1, 16, 16))
-
     canvas = document.getElementById("lesson05-canvas")
     initGL(canvas)
     initShaders()
@@ -472,7 +435,7 @@ window.webGLStart = ->
 
     neheTexture = Texture('data/mariotiles.gif', ->
         loadJSON('data/testmap.json', (x, err) ->
-            map = Tilemap2(x, {
+            map = Tilemap(x, {
                 texture: neheTexture,
                 tilewidth: 16,
                 tileheight: 16,
