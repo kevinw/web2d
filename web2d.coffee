@@ -9,6 +9,7 @@ key =
 keys = {}
 document.onkeydown = (e) -> keys[e.keyCode] = true
 document.onkeyup = (e) -> keys[e.keyCode] = false
+window.onblur = (e) -> keys = {}
 keyPressed = (code) -> return keys[code]
 
 isPowerOfTwo = (x) -> (x & (x - 1)) == 0
@@ -87,67 +88,79 @@ Tilemap2 = (map, texinfo) ->
     numTilesWide = texinfo.tilesWide || parseInt(img.width / ((texinfo.tilegapx || 0) + tilewidth))
     tileCoord = (tileIndex) ->
         y = 0
-        while (tileIndex > texinfo.tilesWide)
-            tileIndex -= texinfo.tilesWide
+        while (tileIndex > numTilesWide)
+            tileIndex -= numTilesWide
             y += 1
 
         return [tileIndex * (tilewidth + texinfo.tilegapx) / img.width,
                 y * (tileheight + texinfo.tilegapy) / img.height]
 
-    console.log('texwidth:  ' + texwidth)
-    console.log('texheight: ' + texheight)
-
+    console.log('texwidth: ' + texwidth + ', texheight: '+ texheight)
     console.log('' + img.width + ' / ((' + (texinfo.tilegapx || 0) + ') + ' + tilewidth + '))')
-
     console.log('numTilesWide: ' + numTilesWide)
 
-    verts = []
-    addvert = (x, y) -> verts.push(x); verts.push(y)
+    layers = []
 
-    texcoords = []
-    addtex = (s, t) -> texcoords.push(s); texcoords.push(t)
+    for layer in map
+        verts = []
+        addvert = (x, y) -> verts.push(x); verts.push(y)
 
-    y = x = 0
-    for row in map
-        x = 0
-        for tile in row
-            if tile != 0
-                # vertices
-                addvert(x*tilewidth,             y*tileheight)
-                addvert(x*tilewidth + tilewidth, y*tileheight)
-                addvert(x*tilewidth + tilewidth, y*tileheight + tileheight)
+        texcoords = []
+        addtex = (s, t) -> texcoords.push(s); texcoords.push(t)
 
-                addvert(x*tilewidth,             y*tileheight)
-                addvert(x*tilewidth + tilewidth, y*tileheight + tileheight)
-                addvert(x*tilewidth,             y*tileheight + tileheight)
+        addTile = (x, y, tile) ->
+            # TODO: use indexes! there are a lot of shared verts/coords here.
+            # vertices
+            addvert(x*tilewidth,             y*tileheight)
+            addvert(x*tilewidth + tilewidth, y*tileheight)
+            addvert(x*tilewidth + tilewidth, y*tileheight + tileheight)
 
-                # texcoords
-                [s, t] = tileCoord(tile - 1)
-                addtex(s, t)
-                addtex(s + texwidth, t)
-                addtex(s + texwidth, t + texheight)
+            addvert(x*tilewidth,             y*tileheight)
+            addvert(x*tilewidth + tilewidth, y*tileheight + tileheight)
+            addvert(x*tilewidth,             y*tileheight + tileheight)
 
-                addtex(s, t)
-                addtex(s + texwidth, t + texheight)
-                addtex(s, t + texheight)
+            # texcoords
+            [s, t] = tileCoord(tile - 1)
+            addtex(s, t)
+            addtex(s + texwidth, t)
+            addtex(s + texwidth, t + texheight)
 
-            x +=1
+            addtex(s, t)
+            addtex(s + texwidth, t + texheight)
+            addtex(s, t + texheight)
 
-        y += 1
 
-    console.log('verts.length: ' + verts.length)
-    console.log('texcoords.length: ' + texcoords.length)
+        y = x = 0
+        for row in layer.tiles
+            x = 0
+            for tile in row
+                if tile != 0
+                    addTile(x, y, tile)
+                x +=1
+            y += 1
 
-    verts = Buffer(2, gl.ARRAY_BUFFER, verts)
-    texcoords = Buffer(2, gl.ARRAY_BUFFER, texcoords)
+        console.log('verts.length: ' + verts.length)
+        console.log('texcoords.length: ' + texcoords.length)
+
+        layers.push({
+            verts: Buffer(2, gl.ARRAY_BUFFER, verts)
+            texcoords: Buffer(2, gl.ARRAY_BUFFER, texcoords)
+            distance: layer.distance
+        })
 
     return {
-        draw: (program) ->
-            program.attrib.aVertexPosition(verts)
-            program.attrib.aTextureCoord(texcoords)
-            verts.drawArrays(gl.TRIANGLES)
-    }
+        draw: (program, x, y) ->
+            for layer in layers
+                layerx = x/layer.distance
+                layery = y/layer.distance
+                program.attrib.aVertexPosition(layer.verts)
+                program.attrib.aTextureCoord(layer.texcoords)
 
+                layerMat = mat4.create(mvMatrix)
+                mat4.translate(layerMat, [parseInt(layerx), parseInt(layery), 0])
+                shaderProgram.uniform.uMVMatrix(layerMat)
+                layer.verts.drawArrays(gl.TRIANGLES)
+    }
 
 Tilemap = ->
     w = 4
@@ -283,6 +296,8 @@ Texture = (src, cb) ->
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, texture.image)
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+        gl.texParameteri(gl.TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, gl.CLAMP)
+        gl.texParameteri(gl.TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.CLAMP)
         gl.bindTexture(gl.TEXTURE_2D, null)
 
         if cb
@@ -390,108 +405,6 @@ setMatrixUniforms = ->
 degToRad = (degrees) ->
     degrees * Math.PI / 180
 
-cubeVertexPositionBuffer = undefined
-cubeVertexTextureCoordBuffer = undefined
-cubeVertexIndexBuffer = undefined
-
-tilemap = undefined
-
-initBuffers = ->
-
-    tilemap = Tilemap()
-
-    cubeVertexPositionBuffer = Buffer(3, gl.ARRAY_BUFFER, [
-        0, 0, 1.0,
-        16, 0, 1.0,
-        16, 16, 1.0,
-        0, 16, 1.0,
-
-        # Back face
-        -1.0, -1.0, -1.0,
-        -1.0,  1.0, -1.0,
-         1.0,  1.0, -1.0,
-         1.0, -1.0, -1.0,
-
-        # Top face
-        -1.0,  1.0, -1.0,
-        -1.0,  1.0,  1.0,
-         1.0,  1.0,  1.0,
-         1.0,  1.0, -1.0,
-
-        # Bottom face
-        -1.0, -1.0, -1.0,
-         1.0, -1.0, -1.0,
-         1.0, -1.0,  1.0,
-        -1.0, -1.0,  1.0,
-
-        # Right face
-         1.0, -1.0, -1.0,
-         1.0,  1.0, -1.0,
-         1.0,  1.0,  1.0,
-         1.0, -1.0,  1.0,
-
-        # Left face
-        -1.0, -1.0, -1.0,
-        -1.0, -1.0,  1.0,
-        -1.0,  1.0,  1.0,
-        -1.0,  1.0, -1.0,
-    ])
-
-    cubeVertexTextureCoordBuffer = Buffer(2, gl.ARRAY_BUFFER, [
-        # Front face
-      0.0, 0.0,
-      0.0625, 0.0,
-      0.0625, 0.0625,
-      0.0, 0.0625,
-
-      # Back face
-      1.0, 0.0,
-      1.0, 1.0,
-      0.0, 1.0,
-      0.0, 0.0,
-
-      # Top face
-      0.0, 1.0,
-      0.0, 0.0,
-      1.0, 0.0,
-      1.0, 1.0,
-
-      # Bottom face
-      1.0, 1.0,
-      0.0, 1.0,
-      0.0, 0.0,
-      1.0, 0.0,
-
-      # Right face
-      1.0, 0.0,
-      1.0, 1.0,
-      0.0, 1.0,
-      0.0, 0.0,
-
-      # Left face
-      0.0, 0.0,
-      1.0, 0.0,
-      1.0, 1.0,
-      0.0, 1.0,
-    ])
-
-    cubeVertexIndexBuffer = Buffer(1, gl.ELEMENT_ARRAY_BUFFER, [
-        0, 1, 2,      0, 2, 3,    # Front face
-    ])
-    ###
-        4, 5, 6,      4, 6, 7,    # Back face
-        8, 9, 10,     8, 10, 11,  # Top face
-        12, 13, 14,   12, 14, 15, # Bottom face
-        16, 17, 18,   16, 18, 19, # Right face
-        20, 21, 22,   20, 22, 23  # Left face
-    ])
-    ###
-
-
-xRot = 0
-yRot = 0
-zRot = 0
-
 camx = 0
 camy = 0
 
@@ -500,30 +413,24 @@ drawScene = ->
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
     #mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix)
-    mat4.ortho(0, gl.viewportWidth/2, gl.viewportHeight/2, 0, -1.0, 1.0, pMatrix)
+    zoom = 1
+    mat4.ortho(0, gl.viewportWidth/zoom, gl.viewportHeight/zoom, 0, -1.0, 1.0, pMatrix)
     mat4.identity(mvMatrix)
-    mat4.translate(mvMatrix, [camx, camy, 0])
+    mat4.translate(mvMatrix, [parseInt(camx), parseInt(camy), 0])
     #mat4.translate(mvMatrix, [0.0, 0.0, -5.0])
 
     #mat4.rotate(mvMatrix, degToRad(xRot), [1, 0, 0])
     #mat4.rotate(mvMatrix, degToRad(yRot), [0, 1, 0])
     #mat4.rotate(mvMatrix, degToRad(zRot), [0, 0, 1])
 
-    shaderProgram.attrib.aVertexPosition(cubeVertexPositionBuffer)
-    shaderProgram.attrib.aTextureCoord(cubeVertexTextureCoordBuffer)
-
     gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_2D, neheTexture)
     shaderProgram.uniform.uSampler(0)
 
-    #setMatrixUniforms()
-    #cubeVertexIndexBuffer.drawElements(gl.TRIANGLES)
-
     #mat4.translate(mvMatrix, [0.0, 32.0, 0.0])
     setMatrixUniforms()
 
-    #tilemap.draw(shaderProgram)
-    map.draw(shaderProgram)
+    map.draw(shaderProgram, camx, camy)
 
 
 lastTime = 0
@@ -559,8 +466,6 @@ window.webGLStart = ->
     canvas = document.getElementById("lesson05-canvas")
     initGL(canvas)
     initShaders()
-    initBuffers()
-    #('nehe.gif')
 
     gl.clearColor(0.0, 0.0, 0.0, 1.0)
     gl.disable(gl.DEPTH_TEST)
@@ -577,5 +482,4 @@ window.webGLStart = ->
             tick()
         )
     )
-
 
