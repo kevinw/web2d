@@ -390,108 +390,6 @@ setMatrixUniforms = ->
 degToRad = (degrees) ->
     degrees * Math.PI / 180
 
-cubeVertexPositionBuffer = undefined
-cubeVertexTextureCoordBuffer = undefined
-cubeVertexIndexBuffer = undefined
-
-tilemap = undefined
-
-initBuffers = ->
-
-    tilemap = Tilemap()
-
-    cubeVertexPositionBuffer = Buffer(3, gl.ARRAY_BUFFER, [
-        0, 0, 1.0,
-        16, 0, 1.0,
-        16, 16, 1.0,
-        0, 16, 1.0,
-
-        # Back face
-        -1.0, -1.0, -1.0,
-        -1.0,  1.0, -1.0,
-         1.0,  1.0, -1.0,
-         1.0, -1.0, -1.0,
-
-        # Top face
-        -1.0,  1.0, -1.0,
-        -1.0,  1.0,  1.0,
-         1.0,  1.0,  1.0,
-         1.0,  1.0, -1.0,
-
-        # Bottom face
-        -1.0, -1.0, -1.0,
-         1.0, -1.0, -1.0,
-         1.0, -1.0,  1.0,
-        -1.0, -1.0,  1.0,
-
-        # Right face
-         1.0, -1.0, -1.0,
-         1.0,  1.0, -1.0,
-         1.0,  1.0,  1.0,
-         1.0, -1.0,  1.0,
-
-        # Left face
-        -1.0, -1.0, -1.0,
-        -1.0, -1.0,  1.0,
-        -1.0,  1.0,  1.0,
-        -1.0,  1.0, -1.0,
-    ])
-
-    cubeVertexTextureCoordBuffer = Buffer(2, gl.ARRAY_BUFFER, [
-        # Front face
-      0.0, 0.0,
-      0.0625, 0.0,
-      0.0625, 0.0625,
-      0.0, 0.0625,
-
-      # Back face
-      1.0, 0.0,
-      1.0, 1.0,
-      0.0, 1.0,
-      0.0, 0.0,
-
-      # Top face
-      0.0, 1.0,
-      0.0, 0.0,
-      1.0, 0.0,
-      1.0, 1.0,
-
-      # Bottom face
-      1.0, 1.0,
-      0.0, 1.0,
-      0.0, 0.0,
-      1.0, 0.0,
-
-      # Right face
-      1.0, 0.0,
-      1.0, 1.0,
-      0.0, 1.0,
-      0.0, 0.0,
-
-      # Left face
-      0.0, 0.0,
-      1.0, 0.0,
-      1.0, 1.0,
-      0.0, 1.0,
-    ])
-
-    cubeVertexIndexBuffer = Buffer(1, gl.ELEMENT_ARRAY_BUFFER, [
-        0, 1, 2,      0, 2, 3,    # Front face
-    ])
-    ###
-        4, 5, 6,      4, 6, 7,    # Back face
-        8, 9, 10,     8, 10, 11,  # Top face
-        12, 13, 14,   12, 14, 15, # Bottom face
-        16, 17, 18,   16, 18, 19, # Right face
-        20, 21, 22,   20, 22, 23  # Left face
-    ])
-    ###
-
-
-xRot = 0
-yRot = 0
-zRot = 0
-
 camx = 0
 camy = 0
 
@@ -509,20 +407,13 @@ drawScene = ->
     #mat4.rotate(mvMatrix, degToRad(yRot), [0, 1, 0])
     #mat4.rotate(mvMatrix, degToRad(zRot), [0, 0, 1])
 
-    shaderProgram.attrib.aVertexPosition(cubeVertexPositionBuffer)
-    shaderProgram.attrib.aTextureCoord(cubeVertexTextureCoordBuffer)
-
     gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_2D, neheTexture)
     shaderProgram.uniform.uSampler(0)
 
-    #setMatrixUniforms()
-    #cubeVertexIndexBuffer.drawElements(gl.TRIANGLES)
-
     #mat4.translate(mvMatrix, [0.0, 32.0, 0.0])
     setMatrixUniforms()
 
-    #tilemap.draw(shaderProgram)
     map.draw(shaderProgram)
 
 
@@ -559,7 +450,6 @@ window.webGLStart = ->
     canvas = document.getElementById("lesson05-canvas")
     initGL(canvas)
     initShaders()
-    initBuffers()
     #('nehe.gif')
 
     gl.clearColor(0.0, 0.0, 0.0, 1.0)
