@@ -73,8 +73,8 @@
     varying vec2 vTextureCoord;
 
     void main(void) {
-        float x = aVertexPosition.x + warp * floor(sin(time + aVertexPosition.x) * 3.0);
-        float y = aVertexPosition.y + warp * floor(cos(time + aVertexPosition.y) * 3.0);
+        float x = aVertexPosition.x + warp * sin(time + aVertexPosition.x) * 8.0;
+        float y = aVertexPosition.y + warp * cos(time + aVertexPosition.y) * 8.0;
         gl_Position = uPMatrix * uMVMatrix * vec4(x, y, 0.0, 1.0);
         vTextureCoord = aTextureCoord;
     }
@@ -100,6 +100,19 @@
         <p>
         <a href="http://github.com/kevinw/web2d">source</a>
     </div>
+    <script type="text/javascript">
+
+      var _gaq = _gaq || [];
+      _gaq.push(['_setAccount', 'UA-73466-7']);
+      _gaq.push(['_trackPageview']);
+
+      (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+      })();
+
+    </script>
 </body>
 
 </html>
