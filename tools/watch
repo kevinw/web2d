@@ -1,2 +1,2 @@
 mkdir js
-@coffee --watch --output js --compile *.coffee
+coffee --watch --output js --compile *.coffee
