@@ -40,6 +40,19 @@
     #description {
         padding-top: 10px;
     }
+
+    #canvasRelative { position: relative; }
+    .loading {
+        position: absolute;
+        left: 20px;
+        right: 20px;
+        top: 20px;
+        bottom: 20px;
+    }
+    .loading progress {
+        width: 100%;
+        height: 20px;
+    }
 </style>
 
 
@@ -89,7 +102,12 @@
     <div id="canvasContainer">
         <div id="canvasWrapper">
             <h1>Web2D</h1>
-            <canvas id="main-canvas" style="border: none;" width="800" height="450"></canvas>
+            <div id="canvasRelative">
+                <canvas id="main-canvas" style="border: none;" width="800" height="450"></canvas>
+                <div class="loading">
+                    <progress value="0" max="100"></progress>
+                </div>
+            </div>
             <div style="" id="fps">0</div>
         </div>
     </div>

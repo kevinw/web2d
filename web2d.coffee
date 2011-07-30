@@ -430,7 +430,14 @@ tick = ->
 
 map = undefined
 
+loaded = (amnt) ->
+    if amnt >= 100
+        $('.loading').hide()
+    else
+        $('.loading progress').val(amnt)
+
 window.webGLStart = ->
+    loaded(10)
     canvas = document.getElementById("main-canvas")
     initGL(canvas)
     initShaders()
@@ -440,16 +447,19 @@ window.webGLStart = ->
 
     gl.clearColor(0.0, 0.0, 0.0, 1.0)
     gl.disable(gl.DEPTH_TEST)
+    loaded(25)
 
     neheTexture = Texture('data/mariotiles.gif', ->
+        loaded(50)
         loadJSON('data/testmap.json', (x, err) ->
             map = Tilemap(x, {
-                texture: neheTexture,
-                tilewidth: 16,
-                tileheight: 16,
-                tilegapx: 1,
-                tilegapy: 1,
+                texture: neheTexture
+                tilewidth: 16
+                tileheight: 16
+                tilegapx: 1
+                tilegapy: 1
                 tilesWide: 12})
+            loaded(100)
             tick()
         )
     )
